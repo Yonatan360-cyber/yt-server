@@ -1,28 +1,40 @@
 from flask import Flask, request, send_file
 import subprocess
-import uuid
+import io
 
 app = Flask(__name__)
 
 @app.route("/download")
 def download():
     url = request.args.get("url")
-    filename = f"{uuid.uuid4()}.mp3"
+    if not url:
+        return "Missing URL", 400
 
+    mp3_data = io.BytesIO()
+
+    # yt-dlp שולח את הפלט ל־stdout
     command = [
         "yt-dlp",
         "-f", "bestaudio",
-        "-x", "--audio-format", "mp3",
-        "-o", filename,
+        "-x",
+        "--audio-format", "mp3",
+        "-o", "-",  # שים "-" כדי לפלט ל-stdout
         url
     ]
 
-    subprocess.run(command)
+    # הפלט של yt-dlp יישמר ב-mp3_data
+    try:
+        process = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        mp3_data.write(process.stdout)
+        mp3_data.seek(0)
+    except Exception as e:
+        return f"Error: {str(e)}", 500
 
-    return send_file(filename, as_attachment=True)
+    return send_file(mp3_data, download_name="channel.mp3", mimetype="audio/mpeg")
 
 @app.route("/")
 def home():
     return "Server Running"
 
-app.run(host="0.0.0.0", port=10000)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000)
