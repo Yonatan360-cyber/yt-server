@@ -1,8 +1,11 @@
 from flask import Flask, request, send_file
 import subprocess
-import io
+import uuid
+import os
 
 app = Flask(__name__)
+DOWNLOAD_FOLDER = "/tmp/downloads"
+os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
 @app.route("/download")
 def download():
@@ -10,27 +13,19 @@ def download():
     if not url:
         return "Missing URL", 400
 
-    mp3_data = io.BytesIO()
+    filename = os.path.join(DOWNLOAD_FOLDER, f"{uuid.uuid4()}.mp3")
 
-    # yt-dlp שולח את הפלט ל־stdout
-    command = [
-        "yt-dlp",
-        "-f", "bestaudio",
-        "-x",
-        "--audio-format", "mp3",
-        "-o", "-",  # שים "-" כדי לפלט ל-stdout
-        url
-    ]
-
-    # הפלט של yt-dlp יישמר ב-mp3_data
     try:
-        process = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        mp3_data.write(process.stdout)
-        mp3_data.seek(0)
+        subprocess.run([
+            "yt-dlp", "-f", "bestaudio", "-x", "--audio-format", "mp3",
+            "-o", filename, url
+        ], check=True)
     except Exception as e:
-        return f"Error: {str(e)}", 500
+        return f"Download failed: {str(e)}", 500
 
-    return send_file(mp3_data, download_name="channel.mp3", mimetype="audio/mpeg")
+    resp = send_file(filename, as_attachment=True)
+    os.remove(filename)
+    return resp
 
 @app.route("/")
 def home():
