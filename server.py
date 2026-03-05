@@ -1,10 +1,11 @@
-from flask import Flask, request, send_file, jsonify
+from flask import Flask, request, jsonify
 import yt_dlp
 import os
 import threading
 
 app = Flask(__name__)
 
+# תיקייה לשמירת ההורדות
 DOWNLOAD_DIR = os.path.join(os.path.expanduser("~"), "Downloads", "yt_dl")
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
@@ -31,9 +32,11 @@ def download():
     if not url:
         return jsonify({"error": "No URL provided"}), 400
 
-    # הרצה ב‑thread כדי שהשרת לא יחסום
+    # הרצה ב-thread כדי שהשרת לא יחסום
     threading.Thread(target=download_channel, args=(url,), daemon=True).start()
     return jsonify({"status": "started", "message": f"Downloading {url} in background"}), 200
 
 if __name__ == "__main__":
-    app.run(port=5000)
+    import os
+    port = int(os.environ.get("PORT", 10000))  # Render מספק PORT
+    app.run(host="0.0.0.0", port=port)
