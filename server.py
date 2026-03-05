@@ -1,37 +1,39 @@
-from flask import Flask, request, send_file
-from flask_cors import CORS
-import subprocess, os, uuid
+from flask import Flask, request, send_file, jsonify
+import yt_dlp
+import os
+import threading
 
 app = Flask(__name__)
-CORS(app)  # מאפשר fetch מכל דפדפן
 
-DOWNLOAD_FOLDER = "/tmp/downloads"
-os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
+DOWNLOAD_DIR = os.path.join(os.path.expanduser("~"), "Downloads", "yt_dl")
+os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-@app.route("/download")
+def download_channel(url):
+    ydl_opts = {
+        'format': 'bestaudio',
+        'outtmpl': os.path.join(DOWNLOAD_DIR, '%(channel)s - %(title)s.%(ext)s'),
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '0',
+        }],
+        'embedthumbnail': True,
+        'embedmetadata': True,
+        'noplaylist': False,
+        'quiet': True
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([url])
+
+@app.route("/download", methods=["GET"])
 def download():
     url = request.args.get("url")
     if not url:
-        return "Missing URL", 400
+        return jsonify({"error": "No URL provided"}), 400
 
-    filename = os.path.join(DOWNLOAD_FOLDER, f"{uuid.uuid4()}.mp3")
-
-    try:
-        subprocess.run([
-            "yt-dlp", "-f", "bestaudio", "-x", "--audio-format", "mp3",
-            "--embed-thumbnail", "--embed-metadata",
-            "-o", filename, url
-        ], check=True)
-    except Exception as e:
-        return f"Download failed: {str(e)}", 500
-
-    resp = send_file(filename, as_attachment=True)
-    os.remove(filename)
-    return resp
-
-@app.route("/")
-def home():
-    return "Server Running"
+    # הרצה ב‑thread כדי שהשרת לא יחסום
+    threading.Thread(target=download_channel, args=(url,), daemon=True).start()
+    return jsonify({"status": "started", "message": f"Downloading {url} in background"}), 200
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    app.run(port=5000)
