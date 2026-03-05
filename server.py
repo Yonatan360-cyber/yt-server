@@ -1,42 +1,53 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
+from flask_cors import CORS
 import yt_dlp
 import os
-import threading
+import zipfile
+import tempfile
 
 app = Flask(__name__)
+CORS(app)  # מאפשר בקשות מכל מקור
 
-# תיקייה לשמירת ההורדות
-DOWNLOAD_DIR = os.path.join(os.path.expanduser("~"), "Downloads", "yt_dl")
-os.makedirs(DOWNLOAD_DIR, exist_ok=True)
-
-def download_channel(url):
-    ydl_opts = {
-        'format': 'bestaudio',
-        'outtmpl': os.path.join(DOWNLOAD_DIR, '%(channel)s - %(title)s.%(ext)s'),
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '0',
-        }],
-        'embedthumbnail': True,
-        'embedmetadata': True,
-        'noplaylist': False,
-        'quiet': True
-    }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
+DOWNLOAD_FOLDER = tempfile.gettempdir()  # תקייה זמנית
 
 @app.route("/download", methods=["GET"])
-def download():
+def download_channel():
     url = request.args.get("url")
     if not url:
-        return jsonify({"error": "No URL provided"}), 400
+        return jsonify({"error": "Missing URL"}), 400
 
-    # הרצה ב-thread כדי שהשרת לא יחסום
-    threading.Thread(target=download_channel, args=(url,), daemon=True).start()
-    return jsonify({"status": "started", "message": f"Downloading {url} in background"}), 200
+    # תקייה זמנית ל־yt-dlp
+    temp_dir = tempfile.mkdtemp(dir=DOWNLOAD_FOLDER)
+
+    ydl_opts = {
+        "format": "bestaudio/best",
+        "outtmpl": os.path.join(temp_dir, "%(title)s.%(ext)s"),
+        "ignoreerrors": True,
+        "quiet": True,
+        "no_warnings": True,
+        "postprocessors": [{
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "mp3",
+            "preferredquality": "0",
+        }],
+    }
+
+    # תחילת הורדה – מחזיר מיד
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    # יצירת ZIP
+    zip_path = os.path.join(DOWNLOAD_FOLDER, "channel.zip")
+    with zipfile.ZipFile(zip_path, "w") as zipf:
+        for root, dirs, files in os.walk(temp_dir):
+            for file in files:
+                zipf.write(os.path.join(root, file), arcname=file)
+
+    return send_file(zip_path, as_attachment=True, download_name="channel.zip")
 
 if __name__ == "__main__":
-    import os
-    port = int(os.environ.get("PORT", 10000))  # Render מספק PORT
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
