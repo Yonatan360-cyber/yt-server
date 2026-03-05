@@ -1,9 +1,9 @@
 from flask import Flask, request, send_file
 from flask_cors import CORS
-import subprocess, uuid, os
+import subprocess, os, uuid
 
 app = Flask(__name__)
-CORS(app)  # מאפשר גישה מכל דפדפן
+CORS(app)  # מאפשר fetch מכל דפדפן
 
 DOWNLOAD_FOLDER = "/tmp/downloads"
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
@@ -19,6 +19,7 @@ def download():
     try:
         subprocess.run([
             "yt-dlp", "-f", "bestaudio", "-x", "--audio-format", "mp3",
+            "--embed-thumbnail", "--embed-metadata",
             "-o", filename, url
         ], check=True)
     except Exception as e:
@@ -33,4 +34,4 @@ def home():
     return "Server Running"
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=10000)
