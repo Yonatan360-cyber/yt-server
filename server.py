@@ -1,9 +1,10 @@
 from flask import Flask, request, send_file
-import subprocess
-import uuid
-import os
+from flask_cors import CORS
+import subprocess, uuid, os
 
 app = Flask(__name__)
+CORS(app)  # מאפשר גישה מכל דפדפן
+
 DOWNLOAD_FOLDER = "/tmp/downloads"
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
@@ -32,4 +33,4 @@ def home():
     return "Server Running"
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    app.run(host="0.0.0.0", port=5000)
